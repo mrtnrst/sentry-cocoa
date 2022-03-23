@@ -6,11 +6,23 @@
  * https://develop.sentry.dev/sdk/client-reports/#envelope-item-payload.
  */
 typedef NS_ENUM(NSUInteger, SentryDataCategory) {
-    kSentryDataCategoryAll,
-    kSentryDataCategoryDefault,
-    kSentryDataCategoryError,
-    kSentryDataCategorySession,
-    kSentryDataCategoryTransaction,
-    kSentryDataCategoryAttachment,
-    kSentryDataCategoryUnknown
+    kSentryDataCategoryAll = 0,
+    kSentryDataCategoryDefault = 1,
+    kSentryDataCategoryError = 2,
+    kSentryDataCategorySession = 3,
+    kSentryDataCategoryTransaction = 4,
+    kSentryDataCategoryAttachment = 5,
+    kSentryDataCategoryUserFeedback = 6,
+    kSentryDataCategoryUnknown = 7
+};
+
+static NSString *_Nonnull const SentryDataCategoryNames[] = {
+    @"", // empty on purpose
+    @"default",
+    @"error",
+    @"session",
+    @"transaction",
+    @"attachment",
+    @"user_report",
+    @"unkown",
 };

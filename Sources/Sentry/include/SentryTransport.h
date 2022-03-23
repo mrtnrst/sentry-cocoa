@@ -1,3 +1,5 @@
+#import "SentryDataCategory.h"
+#import "SentryDiscardReason.h"
 #import <Foundation/Foundation.h>
 
 @class SentryEnvelope, SentryEnvelopeItem, SentryEvent, SentrySession, SentryUserFeedback,
@@ -8,6 +10,8 @@ NS_ASSUME_NONNULL_BEGIN
 // TODO: align with unified SDK api
 NS_SWIFT_NAME(Transport)
 @protocol SentryTransport <NSObject>
+
+- (void)recordLostEvent:(SentryDiscardReason)reason category:(SentryDataCategory)category;
 
 - (void)sendEvent:(SentryEvent *)event
       attachments:(NSArray<SentryAttachment *> *)attachments

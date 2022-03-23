@@ -99,6 +99,38 @@ class SentryHttpTransportTests: XCTestCase {
         fixture.fileManager.deleteAllEnvelopes()
         fixture.requestManager.waitForAllRequests()
     }
+    
+    func testRecordLostEvent() {
+        sut.recordLostEvent(.beforeSend, category: .transaction)
+        sut.recordLostEvent(.beforeSend, category: .transaction)
+        sut.recordLostEvent(.sampleRate, category: .transaction)
+        sut.recordLostEvent(.rateLimitBackoff, category: .error)
+        
+        let beforeSendTransaction = SentryDiscardedEvent(reason: .beforeSend, category: .transaction, quantity: 2)
+        let sampleRateTransaction = SentryDiscardedEvent(reason: .sampleRate, category: .transaction, quantity: 1)
+        let rateLimitBackoffError = SentryDiscardedEvent(reason: .rateLimitBackoff, category: .error, quantity: 1)
+        
+        let clientReport = SentryClientReport(discardedEvents: [
+            beforeSendTransaction,
+            sampleRateTransaction,
+            rateLimitBackoffError
+        ])
+        
+        let event = fixture.event
+        
+        let envelopeItems = [
+            SentryEnvelopeItem(event: event),
+            SentryEnvelopeItem(attachment: TestData.dataAttachment, maxAttachmentSize: 5 * 1_024 * 1_024)!,
+            SentryEnvelopeItem(clientReport: clientReport)
+        ]
+        let clientReportEnvelope = SentryEnvelope(id: event.eventId, items: envelopeItems)
+        let request = SentryHttpTransportTests.buildRequest(clientReportEnvelope)
+        
+        sendEvent()
+        
+        let actualEventRequest = fixture.requestManager.requests.last
+        XCTAssertEqual(request.httpBody, actualEventRequest?.httpBody, "Event was not sent as envelope.")
+    }
 
     func testInitSendsCachedEnvelopes() {
         givenNoInternetConnection()

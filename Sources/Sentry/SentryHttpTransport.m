@@ -1,4 +1,8 @@
 #import "SentryHttpTransport.h"
+#import "SentryClientReport.h"
+#import "SentryDataCategoryMapper.h"
+#import "SentryDiscardReasonMapper.h"
+#import "SentryDiscardedEvent.h"
 #import "SentryDispatchQueueWrapper.h"
 #import "SentryDsn.h"
 #import "SentryEnvelope.h"
@@ -22,6 +26,14 @@ SentryHttpTransport ()
 @property (nonatomic, strong) id<SentryRateLimits> rateLimits;
 @property (nonatomic, strong) SentryEnvelopeRateLimit *envelopeRateLimit;
 @property (nonatomic, strong) SentryDispatchQueueWrapper *dispatchQueue;
+
+/**
+ * Relay expects the discarded events split by data category and reason; see
+ * https://develop.sentry.dev/sdk/client-reports/#envelope-item-payload.
+ * We could use nested dictionaries, but instead, we use a dictionary with `data-category:reason`
+ * and value `quantity` because it's easier to read and type.
+ */
+@property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *discardedEvents;
 
 /**
  * Synching with a dispatch queue to have concurrent reads and writes as barrier blocks is roughly
@@ -48,10 +60,26 @@ SentryHttpTransport ()
         self.envelopeRateLimit = envelopeRateLimit;
         self.dispatchQueue = dispatchQueueWrapper;
         _isSending = NO;
+        self.discardedEvents = [NSMutableDictionary new];
 
         [self sendAllCachedEnvelopes];
     }
     return self;
+}
+
+- (void)recordLostEvent:(SentryDiscardReason)reason category:(SentryDataCategory)category
+{
+    NSString *key = [NSString stringWithFormat:@"%@:%@", SentryDataCategoryNames[category],
+                              SentryDiscardReasonNames[reason]];
+
+    @synchronized(self.discardedEvents) {
+        NSNumber *value = self.discardedEvents[key];
+        if (value == nil) {
+            value = @(0);
+        }
+
+        self.discardedEvents[key] = @(value.integerValue + 1);
+    }
 }
 
 - (void)sendEvent:(SentryEvent *)event attachments:(NSArray<SentryAttachment *> *)attachments
@@ -183,8 +211,10 @@ SentryHttpTransport ()
         return;
     }
 
+    SentryEnvelope *envelopeToSend = [self addClientReport:rateLimitedEnvelope];
+
     NSError *requestError = nil;
-    NSURLRequest *request = [self createEnvelopeRequest:rateLimitedEnvelope
+    NSURLRequest *request = [self createEnvelopeRequest:envelopeToSend
                                        didFailWithError:requestError];
 
     if (nil != requestError) {
@@ -192,6 +222,44 @@ SentryHttpTransport ()
         return;
     } else {
         [self sendEnvelope:envelopeFileContents.path request:request];
+    }
+}
+
+- (SentryEnvelope *)addClientReport:(SentryEnvelope *)envelope
+{
+    @synchronized(self.discardedEvents) {
+        if (self.discardedEvents.count == 0) {
+            return envelope;
+        }
+
+        NSMutableArray<SentryDiscardedEvent *> *events = [NSMutableArray new];
+        for (NSString *key in self.discardedEvents) {
+            NSNumber *quantity = self.discardedEvents[key];
+
+            NSArray<NSString *> *comp = [key componentsSeparatedByString:@":"];
+
+            SentryDataCategory category = [SentryDataCategoryMapper mapStringToCategory:comp[0]];
+            SentryDiscardReason reason = [SentryDiscardReasonMapper mapStringToReason:comp[1]];
+
+            SentryDiscardedEvent *event =
+                [[SentryDiscardedEvent alloc] initWithReason:reason
+                                                    category:category
+                                                    quantity:quantity.integerValue];
+
+            [events addObject:event];
+        }
+
+        SentryClientReport *clientReport =
+            [[SentryClientReport alloc] initWithDiscardedEvents:events];
+
+        SentryEnvelopeItem *clientReportEnvelopeItem =
+            [[SentryEnvelopeItem alloc] initWithClientReport:clientReport];
+
+        NSMutableArray<SentryEnvelopeItem *> *currentItems =
+            [[NSMutableArray alloc] initWithArray:envelope.items];
+        [currentItems addObject:clientReportEnvelopeItem];
+
+        return [[SentryEnvelope alloc] initWithHeader:envelope.header items:currentItems];
     }
 }
 

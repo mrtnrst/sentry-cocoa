@@ -3,7 +3,7 @@
 #import "SentryDefines.h"
 
 @class SentryEvent, SentrySession, SentrySdkInfo, SentryId, SentryUserFeedback, SentryAttachment,
-    SentryTransaction, SentryTraceState;
+    SentryTransaction, SentryTraceState, SentryClientReport;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -84,6 +84,7 @@ SENTRY_NO_INIT
 - (instancetype)initWithEvent:(SentryEvent *)event;
 - (instancetype)initWithSession:(SentrySession *)session;
 - (instancetype)initWithUserFeedback:(SentryUserFeedback *)userFeedback;
+- (instancetype)initWithClientReport:(SentryClientReport *)clientReport;
 - (_Nullable instancetype)initWithAttachment:(SentryAttachment *)attachment
                            maxAttachmentSize:(NSUInteger)maxAttachmentSize;
 - (instancetype)initWithHeader:(SentryEnvelopeItemHeader *)header

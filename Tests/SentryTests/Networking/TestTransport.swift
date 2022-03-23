@@ -3,6 +3,10 @@ import Foundation
 @objc
 public class TestTransport: NSObject, Transport {
     
+    public func recordLostEvent(_ reason: SentryDiscardReason, category: SentryDataCategory) {
+        
+    }
+    
     public func send(event: Event, attachments: [Attachment]) {
         self.send(event: event, traceState: nil, attachments: attachments)
     }
